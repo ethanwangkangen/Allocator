@@ -1,4 +1,4 @@
-#define MAX_SIZE 1024*1024
+#define MAX_SIZE (1024*1024)
 #include <array>
 #include <cstddef>
 #include <iostream>
@@ -13,7 +13,7 @@ namespace ethan {
         Block* nextBlock;
     };
 
-    std::array<std::byte, MAX_SIZE> heap; 
+    alignas(std::max_align_t)std::array<std::byte, MAX_SIZE> heap; 
     // global, so has static storage already
     Block* head {nullptr};
     
@@ -28,7 +28,7 @@ namespace ethan {
 
     Block* trySplit(Block* block, std::size_t size) {
         // Can split
-        if (block->size - size - sizeof(Block) >= 2 ) {
+        if (block->size >= 2 + size + sizeof(Block) ) {
             Block* newBlockPtr = reinterpret_cast<Block*> (reinterpret_cast<std::byte*>(block+1) + size);
             *newBlockPtr = Block{false, block->size - size - sizeof(Block), block->nextBlock};
             block->nextBlock = newBlockPtr;
@@ -39,10 +39,17 @@ namespace ethan {
         return block;
     }
 
+    std::size_t alignup(std::size_t size) {
+        constexpr std::size_t alignment = alignof(std::max_align_t);
+        size = (size + alignment - 1 ) & ~(alignment -1);
+        return size;
+    }
+
     void* alloc(std::size_t size) {
         if (!firstBlockInitialised) initFirstBlock();
 
         //size = alignup(size, alignof(std::max_align_t));
+        size = alignup(size);
 
         Block* curr = head;
         while (curr->size < size || curr->isUsed) { // not enough
@@ -63,12 +70,8 @@ namespace ethan {
             blockPtr->size += (blockPtr->nextBlock->size) + sizeof(Block);
             blockPtr->nextBlock = blockPtr->nextBlock->nextBlock;
         }
-
         blockPtr->isUsed = false;
-
     }
-
-
 }
 
 int main() {
